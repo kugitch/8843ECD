@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Tic Tac Toe</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        xColor: '#06b6d4', // Cyan 500
+                        oColor: '#f43f5e', // Rose 500
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* SVG Drawing Animations */
+        .draw-x-1 {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: draw 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        .draw-x-2 {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: draw 0.25s cubic-bezier(0.4, 0, 0.2, 1) 0.12s forwards;
+        }
+        .draw-o {
+            stroke-dasharray: 220;
+            stroke-dashoffset: 220;
+            animation: draw 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        .win-line {
+            stroke-dasharray: 450;
+            stroke-dashoffset: 450;
+            animation: draw 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes draw {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        /* Winning Cell Pulse */
+        .cell-win {
+            animation: winPulse 1.5s infinite alternate ease-in-out;
+        }
+        @keyframes winPulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(0.95); background-color: rgba(30, 41, 59, 0.9); }
+        }
+
+        /* Hover Ghost Marks */
+        .cell:not(.occupied):hover .ghost-mark {
+            opacity: 0.2;
+            transform: scale(1);
+        }
+        .ghost-mark {
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Custom Glassmorphism */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="text-slate-100 flex flex-col items-center justify-center p-4 min-h-screen overflow-x-hidden">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-md flex flex-col gap-5 my-auto">
+        
+        <!-- Header & Quick Actions -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-rose-500 p-0.5 shadow-lg shadow-cyan-500/20">
+                    <div class="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center font-extrabold text-lg tracking-tighter">
+                        <span class="text-cyan-400">X</span><span class="text-rose-500">O</span>
+                    </div>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                        Tic Tac Toe
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium" id="sub-status">Classic Grid Showdown</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- Sound Toggle -->
+                <button id="sound-btn" aria-label="Toggle Sound" class="p-2.5 rounded-xl glass-panel text-slate-300 hover:text-white hover:bg-slate-800/80 transition active:scale-95" title="Toggle Sound Effects">
+                    <i data-lucide="volume-2" class="w-5 h-5" id="sound-icon"></i>
+                </button>
+                <!-- Reset Scores Button -->
+                <button id="reset-scores-btn" aria-label="Reset Scores" class="p-2.5 rounded-xl glass-panel text-slate-300 hover:text-rose-400 hover:bg-slate-800/80 transition active:scale-95" title="Reset All Scores">
+                    <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mode & Settings Bar -->
+        <div class="glass-panel p-2 rounded-2xl flex flex-col gap-2 shadow-xl">
+            <!-- Game Mode Selector -->
+            <div class="grid grid-cols-2 gap-1 bg-slate-900/80 p-1 rounded-xl">
+                <button id="mode-ai" class="mode-btn flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all bg-slate-800 text-white shadow">
+                    <i data-lucide="bot" class="w-4 h-4 text-cyan-400"></i>
+                    <span>vs AI</span>
+                </button>
+                <button id="mode-2p" class="mode-btn flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all text-slate-400 hover:text-slate-200">
+                    <i data-lucide="users" class="w-4 h-4 text-rose-400"></i>
+                    <span>2 Players</span>
+                </button>
+            </div>
+
+            <!-- AI Options (Shown only in AI Mode) -->
+            <div id="ai-settings" class="flex items-center justify-between px-2 pt-1 pb-0.5 text-xs transition-all">
+                <div class="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <i data-lucide="gauge" class="w-3.5 h-3.5 text-slate-400"></i>
+                    <span>Difficulty:</span>
+                </div>
+                <div class="flex gap-1 bg-slate-900/60 p-1 rounded-lg border border-slate-800/80">
+                    <button data-diff="easy" class="diff-btn px-2.5 py-1 rounded-md font-semibold transition-all text-slate-400 hover:text-slate-200">Easy</button>
+                    <button data-diff="medium" class="diff-btn px-2.5 py-1 rounded-md font-semibold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Medium</button>
+                    <button data-diff="unbeatable" class="diff-btn px-2.5 py-1 rounded-md font-semibold transition-all text-slate-400 hover:text-slate-200">Unbeatable</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scoreboard -->
+        <div class="grid grid-cols-3 gap-3">
+            <!-- Player X Score -->
+            <div id="score-card-x" class="glass-panel rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300 border-cyan-500/40 shadow-lg shadow-cyan-500/5">
+                <div class="absolute top-0 left-0 w-full h-1 bg-cyan-400"></div>
+                <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-cyan-400 mb-0.5">
+                    <span>Player X</span>
+                    <span id="x-role-badge" class="text-[10px] bg-cyan-500/20 px-1.5 py-0.2 rounded text-cyan-300">YOU</span>
+                </div>
+                <span id="score-x" class="text-3xl font-extrabold text-white tracking-tight">0</span>
+            </div>
+
+            <!-- Draws Score -->
+            <div class="glass-panel rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300">
+                <div class="absolute top-0 left-0 w-full h-1 bg-slate-500"></div>
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Draws</span>
+                <span id="score-draws" class="text-3xl font-extrabold text-slate-200 tracking-tight">0</span>
+            </div>
+
+            <!-- Player O Score -->
+            <div id="score-card-o" class="glass-panel rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300">
+                <div class="absolute top-0 left-0 w-full h-1 bg-rose-500"></div>
+                <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-400 mb-0.5">
+                    <span>Player O</span>
+                    <span id="o-role-badge" class="text-[10px] bg-rose-500/20 px-1.5 py-0.2 rounded text-rose-300">AI</span>
+                </div>
+                <span id="score-o" class="text-3xl font-extrabold text-white tracking-tight">0</span>
+            </div>
+        </div>
+
+        <!-- Turn / Status Banner -->
+        <div class="flex items-center justify-between px-4 py-3 rounded-2xl glass-panel">
+            <div class="flex items-center gap-3">
+                <div id="turn-badge" class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold text-lg transition-all duration-300">
+                    X
+                </div>
+                <div>
+                    <div id="status-text" class="text-base font-bold text-white tracking-wide">Player X's Turn</div>
+                    <div id="status-subtext" class="text-xs text-slate-400">Make your move on the grid</div>
+                </div>
+            </div>
+
+            <button id="swap-first-btn" class="text-xs font-semibold text-slate-400 hover:text-cyan-400 flex items-center gap-1 bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700/60 transition active:scale-95" title="Switch who plays first">
+                <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+                <span id="starter-label">Start: X</span>
+            </button>
+        </div>
+
+        <!-- Game Board Wrapper -->
+        <div class="relative aspect-square w-full glass-panel p-3.5 sm:p-4 rounded-3xl shadow-2xl">
+            <!-- 3x3 Grid -->
+            <div id="board" class="grid grid-cols-3 grid-rows-3 gap-3 sm:gap-3.5 w-full h-full relative z-10">
+                <!-- 9 Cells dynamically managed by JS -->
+            </div>
+
+            <!-- SVG Overlay for Winning Line -->
+            <svg id="win-line-svg" viewBox="0 0 300 300" class="absolute inset-0 w-full h-full pointer-events-none z-20 p-3.5 sm:p-4 hidden">
+                <line id="win-line" x1="0" y1="0" x2="0" y2="0" stroke="currentColor" stroke-width="10" stroke-linecap="round" class="win-line" />
+            </svg>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="flex gap-3">
+            <button id="new-game-btn" class="w-full py-3.5 px-6 rounded-2xl font-bold text-base bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]">
+                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                <span>New Round</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Logic & Audio Script -->
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // --- SOUND ENGINE (Web Audio API Synthesizer) ---
+        class SoundEffects {
+            constructor() {
+                this.enabled = true;
+                this.ctx = null;
+            }
+
+            initContext() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playTone(freq, type, duration, delay = 0, vol = 0.12) {
+                if (!this.enabled) return;
+                try {
+                    this.initContext();
+                    if (!this.ctx) return;
+
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(this.ctx.currentTime + delay);
+                    osc.stop(this.ctx.currentTime + delay + duration);
+                } catch (e) {
+                    // Ignore audio context errors if blocked by browser autoplay policy
+                }
+            }
+
+            playMoveX() {
+                this.playTone(420, 'sine', 0.12, 0, 0.15);
+                this.playTone(640, 'sine', 0.08, 0.04, 0.1);
+            }
+
+            playMoveO() {
+                this.playTone(320, 'sine', 0.14, 0, 0.15);
+                this.playTone(480, 'sine', 0.09, 0.04, 0.1);
+            }
+
+            playWin() {
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((note, idx) => {
+                    this.playTone(note, 'triangle', 0.28, idx * 0.09, 0.18);
+                });
+            }
+
+            playDraw() {
+                this.playTone(300, 'sawtooth', 0.18, 0, 0.08);
+                this.playTone(250, 'sawtooth', 0.25, 0.15, 0.08);
+            }
+
+            playClick() {
+                this.playTone(800, 'sine', 0.04, 0, 0.06);
+            }
+        }
+
+        const sfx = new SoundEffects();
+
+        // --- GAME CONSTANTS & STATE ---
+        const WINNING_COMBOS = [
+            { indices: [0, 1, 2], coords: { x1: 22, y1: 50, x2: 278, y2: 50 } },   // Row 1
+            { indices: [3, 4, 5], coords: { x1: 22, y1: 150, x2: 278, y2: 150 } }, // Row 2
+            { indices: [6, 7, 8], coords: { x1: 22, y1: 250, x2: 278, y2: 250 } }, // Row 3
+            { indices: [0, 3, 6], coords: { x1: 50, y1: 22, x2: 50, y2: 278 } },   // Col 1
+            { indices: [1, 4, 7], coords: { x1: 150, y1: 22, x2: 150, y2: 278 } }, // Col 2
+            { indices: [2, 5, 8], coords: { x1: 250, y1: 22, x2: 250, y2: 278 } }, // Col 3
+            { indices: [0, 4, 8], coords: { x1: 28, y1: 28, x2: 272, y2: 272 } },  // Diag 1
+            { indices: [2, 4, 6], coords: { x1: 272, y1: 28, x2: 28, y2: 272 } }   // Diag 2
+        ];
+
+        let state = {
+            board: Array(9).fill(null),
+            currentPlayer: 'X',
+            startingPlayer: 'X',
+            isGameActive: true,
+            isAiThinking: false,
+            mode: 'ai',          // 'ai' or '2p'
+            difficulty: 'medium', // 'easy', 'medium', 'unbeatable'
+            scores: { X: 0, O: 0, draws: 0 }
+        };
+
+        // --- DOM ELEMENTS ---
+        const boardEl = document.getElementById('board');
+        const winLineSvg = document.getElementById('win-line-svg');
+        const winLineEl = document.getElementById('win-line');
+        const turnBadge = document.getElementById('turn-badge');
+        const statusText = document.getElementById('status-text');
+        const statusSubtext = document.getElementById('status-subtext');
+        const scoreXEl = document.getElementById('score-x');
+        const scoreOEl = document.getElementById('score-o');
+        const scoreDrawsEl = document.getElementById('score-draws');
+        const scoreCardX = document.getElementById('score-card-x');
+        const scoreCardO = document.getElementById('score-card-o');
+        const xRoleBadge = document.getElementById('x-role-badge');
+        const oRoleBadge = document.getElementById('o-role-badge');
+        const modeAiBtn = document.getElementById('mode-ai');
+        const mode2pBtn = document.getElementById('mode-2p');
+        const aiSettingsEl = document.getElementById('ai-settings');
+        const diffBtns = document.querySelectorAll('.diff-btn');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const resetScoresBtn = document.getElementById('reset-scores-btn');
+        const soundBtn = document.getElementById('sound-btn');
+        const soundIcon = document.getElementById('sound-icon');
+        const swapFirstBtn = document.getElementById('swap-first-btn');
+        const starterLabel = document.getElementById('starter-label');
+
+        // --- SVG TEMPLATES ---
+        function getXSvg(isGhost = false) {
+            return `
+                <svg viewBox="0 0 100 100" class="w-3/5 h-3/5 ${isGhost ? 'ghost-mark text-cyan-400' : 'text-cyan-400 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]'}">
+                    <line x1="20" y1="20" x2="80" y2="80" stroke="currentColor" stroke-width="12" stroke-linecap="round" class="${isGhost ? '' : 'draw-x-1'}" />
+                    <line x1="80" y1="20" x2="20" y2="80" stroke="currentColor" stroke-width="12" stroke-linecap="round" class="${isGhost ? '' : 'draw-x-2'}" />
+                </svg>
+            `;
+        }
+
+        function getOSvg(isGhost = false) {
+            return `
+                <svg viewBox="0 0 100 100" class="w-3/5 h-3/5 ${isGhost ? 'ghost-mark text-rose-500' : 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]'}">
+                    <circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" transform="rotate(-90 50 50)" class="${isGhost ? '' : 'draw-o'}" />
+                </svg>
+            `;
+        }
+
+        // --- INITIALIZE BOARD ---
+        function createBoardDOM() {
+            boardEl.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('button');
+                cell.className = 'cell bg-slate-800/75 hover:bg-slate-800 border border-slate-700/60 rounded-2xl flex items-center justify-center relative transition-all duration-200 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-400/50 active:scale-95';
+                cell.dataset.index = i;
+                cell.setAttribute('aria-label', `Cell ${i + 1}`);
+                cell.addEventListener('click', () => handleCellClick(i));
+                boardEl.appendChild(cell);
+            }
+            updateGhostMarks();
+        }
+
+        // Update hover previews on empty cells
+        function updateGhostMarks() {
+            const cells = boardEl.querySelectorAll('.cell');
+            cells.forEach((cell, idx) => {
+                if (!state.board[idx]) {
+                    if (state.isGameActive && !state.isAiThinking) {
+                        cell.innerHTML = state.currentPlayer === 'X' ? getXSvg(true) : getOSvg(true);
+                        cell.classList.remove('occupied', 'cursor-default');
+                        cell.classList.add('cursor-pointer');
+                    } else {
+                        cell.innerHTML = '';
+                        cell.classList.add('cursor-default');
+                    }
+                }
+            });
+        }
+
+        // --- HANDLE PLAYER MOVE ---
+        function handleCellClick(index) {
+            if (!state.isGameActive || state.isAiThinking || state.board[index] !== null) {
+                return;
+            }
+
+            makeMove(index, state.currentPlayer);
+
+            // Check if AI needs to respond
+            if (state.isGameActive && state.mode === 'ai' && state.currentPlayer === 'O') {
+                triggerAiTurn();
+            }
+        }
+
+        function makeMove(index, player) {
+            state.board[index] = player;
+
+            // Render SVG in cell
+            const cell = boardEl.children[index];
+            cell.classList.add('occupied', 'cursor-default');
+            cell.classList.remove('cursor-pointer');
+            cell.innerHTML = player === 'X' ? getXSvg(false) : getOSvg(false);
+
+            // Play Sound
+            if (player === 'X') sfx.playMoveX();
+            else sfx.playMoveO();
+
+            // Check win or draw
+            const winInfo = checkWinner(state.board);
+            if (winInfo) {
+                endGame(winInfo.winner, winInfo.combo);
+                return;
+            }
+
+            if (state.board.every(cell => cell !== null)) {
+                endGame('draw');
+                return;
+            }
+
+            // Switch Turn
+            state.currentPlayer = state.currentPlayer === 'X' ? 'O' : 'X';
+            updateTurnUI();
+            updateGhostMarks();
+        }
+
+        // --- AI LOGIC ---
+        function triggerAiTurn() {
+            state.isAiThinking = true;
+            updateTurnUI();
+            updateGhostMarks();
+
+            // Realistic brief thinking delay
+            const delay = 420 + Math.random() * 250;
+            setTimeout(() => {
+                if (!state.isGameActive) return;
+                const moveIndex = computeAiMove();
+                state.isAiThinking = false;
+                if (moveIndex !== null && moveIndex !== undefined) {
+                    makeMove(moveIndex, 'O');
+                }
+            }, delay);
+        }
+
+        function computeAiMove() {
+            const emptyIndices = state.board
+                .map((val, idx) => (val === null ? idx : null))
+                .filter(val => val !== null);
+
+            if (emptyIndices.length === 0) return null;
+
+            // Easy: 100% Random move
+            if (state.difficulty === 'easy') {
+                return emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            }
+
+            // Medium: Wins if immediate, blocks if immediate, otherwise 60% optimal / 40% random
+            if (state.difficulty === 'medium') {
+                // Check immediate win for O
+                const winMove = findImmediateMove('O', emptyIndices);
+                if (winMove !== null) return winMove;
+
+                // Check immediate block against X
+                const blockMove = findImmediateMove('X', emptyIndices);
+                if (blockMove !== null) return blockMove;
+
+                if (Math.random() < 0.55) {
+                    return getBestMoveMinimax(state.board, 'O');
+                } else {
+                    return emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+                }
+            }
+
+            // Unbeatable: Full Minimax algorithm
+            return getBestMoveMinimax(state.board, 'O');
+        }
+
+        function findImmediateMove(player, emptyIndices) {
+            for (let idx of emptyIndices) {
+                state.board[idx] = player;
+                const win = checkWinner(state.board);
+                state.board[idx] = null;
+                if (win && win.winner === player) {
+                    return idx;
+                }
+            }
+            return null;
+        }
+
+        function getBestMoveMinimax(boardState, aiPlayer) {
+            // If board is completely empty, pick center or a corner for variety & speed
+            const emptyCount = boardState.filter(c => c === null).length;
+            if (emptyCount === 9) {
+                constbook = [0, 2, 4, 6, 8];
+                return constbook[Math.floor(Math.random() * constbook.length)];
+            }
+
+            let bestScore = -Infinity;
+            let bestMoves = [];
+
+            for (let i = 0; i < 9; i++) {
+                if (boardState[i] === null) {
+                    boardState[i] = aiPlayer;
+                    let score = minimax(boardState, 0, false);
+                    boardState[i] = null;
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMoves = [i];
+                    } else if (score === bestScore) {
+                        bestMoves.push(i);
+                    }
+                }
+            }
+
+            // Pick randomly among equally optimal moves so AI feels dynamic
+            return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        }
+
+        function minimax(boardState, depth, isMaximizing) {
+            const winInfo = checkWinner(boardState);
+            if (winInfo) {
+                if (winInfo.winner === 'O') return 10 - depth;
+                if (winInfo.winner === 'X') return depth - 10;
+            }
+            if (boardState.every(c => c !== null)) {
+                return 0;
+            }
+
+            if (isMaximizing) {
+                let best = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (boardState[i] === null) {
+                        boardState[i] = 'O';
+                        best = Math.max(best, minimax(boardState, depth + 1, false));
+                        boardState[i] = null;
+                    }
+                }
+                return best;
+            } else {
+                let best = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (boardState[i] === null) {
+                        boardState[i] = 'X';
+                        best = Math.min(best, minimax(boardState, depth + 1, true));
+                        boardState[i] = null;
+                    }
+                }
+                return best;
+            }
+        }
+
+        // --- WIN & ENDGAME CHECKS ---
+        function checkWinner(boardState) {
+            for (let combo of WINNING_COMBOS) {
+                const [a, b, c] = combo.indices;
+                if (boardState[a] && boardState[a] === boardState[b] && boardState[a] === boardState[c]) {
+                    return { winner: boardState[a], combo };
+                }
+            }
+            return null;
+        }
+
+        function endGame(result, winCombo = null) {
+            state.isGameActive = false;
+            state.isAiThinking = false;
+            updateGhostMarks();
+
+            if (result === 'draw') {
+                state.scores.draws++;
+                scoreDrawsEl.textContent = state.scores.draws;
+                sfx.playDraw();
+
+                turnBadge.className = 'w-8 h-8 rounded-lg bg-slate-500/20 border border-slate-500/40 flex items-center justify-center text-slate-300 font-bold text-lg';
+                turnBadge.textContent = '=';
+                statusText.textContent = "It's a Draw!";
+                statusSubtext.textContent = 'Well played by both sides';
+                return;
+            }
+
+            // Update Winner Score
+            state.scores[result]++;
+            if (result === 'X') {
+                scoreXEl.textContent = state.scores.X;
+            } else {
+                scoreOEl.textContent = state.scores.O;
+            }
+
+            sfx.playWin();
+
+            // Highlight Winning Cells
+            const cells = boardEl.querySelectorAll('.cell');
+            cells.forEach((cell, idx) => {
+                if (winCombo.indices.includes(idx)) {
+                    cell.classList.add('cell-win');
+                    cell.classList.add(result === 'X' ? 'border-cyan-400/80' : 'border-rose-500/80');
+                } else {
+                    cell.classList.add('opacity-45');
+                }
+            });
+
+            // Animate SVG Winning Strike Line
+            const { x1, y1, x2, y2 } = winCombo.coords;
+            winLineEl.setAttribute('x1', x1);
+            winLineEl.setAttribute('y1', y1);
+            winLineEl.setAttribute('x2', x2);
+            winLineEl.setAttribute('y2', y2);
+
+            winLineSvg.classList.remove('hidden', 'text-cyan-400', 'text-rose-500');
+            winLineSvg.classList.add(result === 'X' ? 'text-cyan-400' : 'text-rose-500');
+
+            // Reset animation by cloning or forcing reflow
+            winLineEl.classList.remove('win-line');
+            void winLineEl.offsetWidth;
+            winLineEl.classList.add('win-line');
+
+            // Update Banner Status
+            const isAiWinner = state.mode === 'ai' && result === 'O';
+            if (result === 'X') {
+                turnBadge.className = 'w-8 h-8 rounded-lg bg-cyan-500 text-slate-950 flex items-center justify-center font-extrabold text-lg shadow-lg shadow-cyan-500/30';
+                turnBadge.textContent = 'X';
+                statusText.textContent = state.mode === 'ai' ? 'You Win!' : 'Player X Wins!';
+                statusSubtext.textContent = 'Three in a row achieved!';
+            } else {
+                turnBadge.className = 'w-8 h-8 rounded-lg bg-rose-500 text-white flex items-center justify-center font-extrabold text-lg shadow-lg shadow-rose-500/30';
+                turnBadge.textContent = 'O';
+                statusText.textContent = isAiWinner ? 'AI Wins!' : 'Player O Wins!';
+                statusSubtext.textContent = isAiWinner ? 'Try another strategy next round' : 'Three in a row achieved!';
+            }
+
+            // Trigger Confetti if a human wins
+            if (!isAiWinner && typeof confetti === 'function') {
+                confetti({
+                    particleCount: 70,
+                    spread: 65,
+                    origin: { y: 0.65 },
+                    colors: result === 'X' ? ['#06b6d4', '#38bdf8', '#ffffff'] : ['#f43f5e', '#fb7185', '#ffffff']
+                });
+            }
+        }
+
+        // --- UI UPDATES ---
+        function updateTurnUI() {
+            // Highlight active player's score card
+            if (state.currentPlayer === 'X') {
+                scoreCardX.classList.add('border-cyan-500/50', 'shadow-lg', 'shadow-cyan-500/10');
+                scoreCardO.classList.remove('border-rose-500/50', 'shadow-lg', 'shadow-rose-500/10');
+
+                turnBadge.className = 'w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold text-lg transition-all duration-300';
+                turnBadge.textContent = 'X';
+                statusText.textContent = state.mode === 'ai' ? "Your Turn (X)" : "Player X's Turn";
+                statusSubtext.textContent = 'Select an empty square';
+            } else {
+                scoreCardO.classList.add('border-rose-500/50', 'shadow-lg', 'shadow-rose-500/10');
+                scoreCardX.classList.remove('border-cyan-500/50', 'shadow-lg', 'shadow-cyan-500/10');
+
+                turnBadge.className = 'w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 font-bold text-lg transition-all duration-300';
+                turnBadge.textContent = 'O';
+
+                if (state.mode === 'ai') {
+                    statusText.textContent = 'AI is thinking...';
+                    statusSubtext.textContent = `Difficulty: ${state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1)}`;
+                } else {
+                    statusText.textContent = "Player O's Turn";
+                    statusSubtext.textContent = 'Select an empty square';
+                }
+            }
+        }
+
+        function resetRound() {
+            state.board = Array(9).fill(null);
+            state.currentPlayer = state.startingPlayer;
+            state.isGameActive = true;
+            state.isAiThinking = false;
+
+            winLineSvg.classList.add('hidden');
+            createBoardDOM();
+            updateTurnUI();
+
+            // If AI is set to start first ('O')
+            if (state.mode === 'ai' && state.currentPlayer === 'O') {
+                triggerAiTurn();
+            }
+        }
+
+        function resetAllScores() {
+            sfx.playClick();
+            state.scores = { X: 0, O: 0, draws: 0 };
+            scoreXEl.textContent = '0';
+            scoreOEl.textContent = '0';
+            scoreDrawsEl.textContent = '0';
+            resetRound();
+        }
+
+        // --- EVENT LISTENERS ---
+        modeAiBtn.addEventListener('click', () => {
+            if (state.mode === 'ai') return;
+            sfx.playClick();
+            state.mode = 'ai';
+            modeAiBtn.className = 'mode-btn flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all bg-slate-800 text-white shadow';
+            mode2pBtn.className = 'mode-btn flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all text-slate-400 hover:text-slate-200';
+            aiSettingsEl.classList.remove('hidden');
+            xRoleBadge.textContent = 'YOU';
+            oRoleBadge.textContent = 'AI';
+            resetAllScores();
+        });
+
+        mode2pBtn.addEventListener('click', () => {
+            if (state.mode === '2p') return;
+            sfx.playClick();
+            state.mode = '2p';
+            mode2pBtn.className = 'mode-btn flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all bg-slate-800 text-white shadow';
+            modeAiBtn.className = 'mode-btn flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all text-slate-400 hover:text-slate-200';
+            aiSettingsEl.classList.add('hidden');
+            xRoleBadge.textContent = 'P1';
+            oRoleBadge.textContent = 'P2';
+            resetAllScores();
+        });
+
+        diffBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const newDiff = btn.dataset.diff;
+                if (state.difficulty === newDiff) return;
+                sfx.playClick();
+                state.difficulty = newDiff;
+
+                diffBtns.forEach(b => {
+                    b.className = 'diff-btn px-2.5 py-1 rounded-md font-semibold transition-all text-slate-400 hover:text-slate-200';
+                });
+                btn.className = 'diff-btn px-2.5 py-1 rounded-md font-semibold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+
+                resetRound();
+            });
+        });
+
+        swapFirstBtn.addEventListener('click', () => {
+            sfx.playClick();
+            state.startingPlayer = state.startingPlayer === 'X' ? 'O' : 'X';
+            starterLabel.textContent = `Start: ${state.startingPlayer}`;
+            resetRound();
+        });
+
+        newGameBtn.addEventListener('click', () => {
+            sfx.playClick();
+            resetRound();
+        });
+
+        resetScoresBtn.addEventListener('click', resetAllScores);
+
+        soundBtn.addEventListener('click', () => {
+            sfx.enabled = !sfx.enabled;
+            if (sfx.enabled) {
+                sfx.playClick();
+                soundIcon.setAttribute('data-lucide', 'volume-2');
+                soundBtn.classList.remove('text-slate-500');
+                soundBtn.classList.add('text-slate-300');
+            } else {
+                soundIcon.setAttribute('data-lucide', 'volume-x');
+                soundBtn.classList.remove('text-slate-300');
+                soundBtn.classList.add('text-slate-500');
+            }
+            lucide.createIcons();
+        });
+
+        // Start Initial Game on Load
+        window.onload = () => {
+            createBoardDOM();
+            updateTurnUI();
+        };
+    </script>
+</body>
+</html>
